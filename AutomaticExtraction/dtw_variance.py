@@ -505,9 +505,9 @@ def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_j
 
 
 
-def get_whistle_end(annotation_times, annotation_freqs, wh_times, wh_freqs, annotation_name):
+def get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs, annotation_name):
     """
-    Detect whistle end using DTW points association.
+    Detect whistle's start and end using DTW points association.
 
     Parameters
     ----------
@@ -524,10 +524,8 @@ def get_whistle_end(annotation_times, annotation_freqs, wh_times, wh_freqs, anno
     ind_start_end = {'SW_Neo_simple':(28,362), 'SW_Neo_stairs':(38,362),'SW_Luna':(30,379), 'SW_Nana':(100,467), 'SW_Shy':(30,400), 
                      'SW_Nikita_normal':(18,185), 'NSW_2':(37,600), 'NSW_6':(55,446), 'NSW_7':(45,360)}
     
-    try :
-        first, last = ind_start_end[annotation_name]
-    except KeyError:
-        first, last = (0,-1)
+    
+    first, last = ind_start_end[annotation_name]
     
     dist, path = fastdtw(annotation_freqs, wh_freqs, dist=euclidean)
     
@@ -585,7 +583,7 @@ def wh_from_peaks(peak, recording, times, annotation_times, annotation_freqs, an
     # Whistle's time
     wh_times = times[ind_times]
     
-    wh_freqs, wh_times = get_whistle_end(annotation_times, annotation_freqs, wh_times, wh_freqs, annotation_name)
+    wh_freqs, wh_times = get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs, annotation_name)
     
     dist,_ = fastdtw(annotation_freqs, wh_freqs, dist=euclidean)
     norm_dist = dist/len(wh_freqs)

@@ -74,9 +74,9 @@ def spectrogram(samples, sample_rate, stride_ms = 5.0,
     freqs = freqs[ind_min:ind_max]
     
     # specgram = np.log(fft[ind_min:ind_max, :] + eps)
-    specgram = fft[ind_min:ind_max, :]
+    # specgram = fft[ind_min:ind_max, :]
         
-    return specgram, freqs, times
+    return fft[ind_min:ind_max, :], freqs, times
 
 
 def wav_to_spec(recording_path, stride_ms = 5.0, window_ms = 10.0, max_freq = np.inf, min_freq = 0, cut=None):
@@ -108,13 +108,21 @@ def wav_to_spec(recording_path, stride_ms = 5.0, window_ms = 10.0, max_freq = np
     except IndexError:
         pass
     
-    specgram, freqs, times = spectrogram(samples, sample_rate, stride_ms=5.0, window_ms=10.0, 
+    if cut is not None:
+        s_start, s_end = cut
+        samples_time = np.linspace(0, len(samples)/sample_rate, len(samples))
+        samples = samples[(samples_time >= s_start)&(samples_time <= s_end)]
+    
+    specgram, freqs, times = spectrogram(samples, sample_rate, stride_ms=stride_ms, window_ms=window_ms, 
                                          max_freq=max_freq, min_freq=min_freq)
     
     if cut is not None:
-        s_start, s_end = cut
-        specgram = specgram[:,(times > s_start)&(times < s_end)]
-        times = times[(times > s_start)&(times < s_end)]
+        times = times +s_start
+    
+    # if cut is not None:
+    #     s_start, s_end = cut
+    #     specgram = specgram[:,(times > s_start)&(times < s_end)]
+    #     times = times[(times > s_start)&(times < s_end)]
     
     return specgram, freqs, times
 
