@@ -11,14 +11,7 @@ from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from joblib import Parallel, delayed
 from scipy.signal import find_peaks
-
-# For graphic interface
-import tkinter as tk
-from tkinter.ttk import Progressbar
 from tqdm import tqdm
-
-# Ignore warnings a specific warning
-np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
 
 
@@ -64,40 +57,6 @@ def variance_vector(specgram, freqs, window_size = 5, n_jobs = -1):
     # Variance vector
     var_wind = Parallel(n_jobs= n_jobs)(delayed(apply_variance)(window) for window in tqdm(windows))
     
-    
-    # # Initialize the vector and the window's indexes
-    # var_wind = np.zeros(specgram.shape[1])
-    # index_window_min = 0
-    # index_window_max = window_size
-    
-    # pbar = tqdm(total=specgram.shape[1]+1)
-    
-    # # Loop until the window pass outside the spectrogram
-    # while index_window_max < specgram.shape[1]:
-        
-    #     # Add all the frequency intensity on the current window
-    #     current_window = np.apply_along_axis(np.sum, 1, specgram[:,index_window_min:index_window_max])
-        
-    #     # rescale for probabilities
-    #     current_window = current_window/sum(current_window)
-        
-    #     # Expectation
-    #     expectation = sum(current_window*freqs)
-    #     expectation_squared = sum(current_window*(freqs**2))
-        
-        
-    #     # Variance
-    #     var_wind[index_window_min:index_window_max] = expectation_squared - expectation**2
-        
-    #     # Increment the window's indexes
-    #     index_window_min += 1
-    #     index_window_max += 1
-    #     pbar.update(1)
-    
-    # # Assign last point
-    # var_wind[index_window_min:index_window_max] = expectation_squared - expectation**2
-    # pbar.update(1)
-    
     return np.array(var_wind)
 
 
@@ -128,7 +87,7 @@ def whistle_zones(var_wind, threshold = 1e6, window_length = 60, selection_perce
     return wh_zone
 
 
-def vectorize_wh_zones(specgram, times, freqs, wh_zone, window_size = 5, delta = 3, graph_window=None):
+def vectorize_wh_zones(specgram, times, freqs, wh_zone, window_size = 5, delta = 3):
     
     # Progress bar
     pbar = tqdm(total=specgram.shape[1]+1)
@@ -347,15 +306,7 @@ def split_wh_zones(wht, whf, delta_t = 1):
     
 
 
-def distance_wh_zones(wht, whf, annotation_freqs, annotation_times, alphas = (0.5,1.25), n_jobs=-1, graph_window=None):
-    
-    # Graphic window display
-    if graph_window is not None:
-        label = tk.Label(graph_window, text='Computing distance', bg="white")
-        label.pack(anchor=tk.W)
-        graph_window.update()
-        bar = Progressbar(graph_window, orient ="horizontal",length = 400, mode ="determinate")
-        bar.pack()
+def distance_wh_zones(wht, whf, annotation_freqs, annotation_times, alphas = (0.5,1.25), n_jobs=-1):
     
     # List to store every window
     windows = []
@@ -415,16 +366,11 @@ def distance_wh_zones(wht, whf, annotation_freqs, annotation_times, alphas = (0.
     Dist = [d[0] for d in Distances]
     Norm_Dist = [d[1] for d in Distances]
     
-    # Graphic window display update
-    if graph_window is not None:
-        label.forget()
-        bar.forget()
-        
     return np.array(Dist), np.array(Norm_Dist)
     
     
 
-def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_jobs=-1, graph_window=None):
+def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_jobs=-1):
     """
     Compute distance between every frame (points by points) of the recording 
     and the whistle annotation using DTW.
@@ -437,21 +383,12 @@ def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_j
     annotation_times : Time vector of the annotation.
     n_jobs : Number of core to use for computing. -1 means all the cores available,-2 all but one and so on. 
              The default is -1.
-    graph_window : optional tkinter frame. Used for plotting a progress bar in a graphic window. Frame should be empty.
 
     Returns
     -------
     Dist : Distance vector.
 
     """
-    
-    # Graphic window display
-    if graph_window is not None:
-        label = tk.Label(graph_window, text='Computing distance', bg="white")
-        label.pack(anchor=tk.W)
-        graph_window.update()
-        bar = Progressbar(graph_window, orient ="horizontal",length = 400, mode ="determinate")
-        bar.pack()
     
     # Time to start at t=0
     var_annots_times = annotation_times - annotation_times[0]
@@ -474,9 +411,6 @@ def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_j
         ind_min +=1
         ind_max +=1
     
-    # # Graphic window display update
-    # if graph_window is not None:
-    #     progress = 100/len(windows)
     
     # Function for parallelizing
     def apply_distance(window):
@@ -485,27 +419,16 @@ def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_j
         """
         dist, _ = fastdtw(annotation_freqs, recording[window[0]:window[1]], dist=euclidean)
         
-        # # Graphic window display update
-        # if graph_window is not None:
-        #     bar["value"] += progress
-        #     graph_window.update_idletasks()
-
-        
         return dist
     
     # Distance vector
     Dist = Parallel(n_jobs= n_jobs)(delayed(apply_distance)(window) for window in tqdm(windows))
     
-    # Graphic window display update
-    if graph_window is not None:
-        label.forget()
-        bar.forget()
-        
     return np.array(Dist)
 
 
 
-def get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs, annotation_name):
+def get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs):
     """
     Detect whistle's start and end using DTW points association.
 
@@ -521,11 +444,9 @@ def get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs, an
 
     """
     
-    ind_start_end = {'SW_Neo_simple':(28,362), 'SW_Neo_stairs':(38,362),'SW_Luna':(30,379), 'SW_Nana':(100,467), 'SW_Shy':(30,400), 
-                     'SW_Nikita_normal':(18,185), 'NSW_2':(37,600), 'NSW_6':(55,446), 'NSW_7':(45,360)}
     
-    
-    first, last = ind_start_end[annotation_name]
+    first = np.ceil(10/100*len(annotation_freqs))
+    last = np.floor(90/100*len(annotation_freqs))
     
     dist, path = fastdtw(annotation_freqs, wh_freqs, dist=euclidean)
     
@@ -583,7 +504,7 @@ def wh_from_peaks(peak, recording, times, annotation_times, annotation_freqs, an
     # Whistle's time
     wh_times = times[ind_times]
     
-    wh_freqs, wh_times = get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs, annotation_name)
+    wh_freqs, wh_times = get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs)
     
     dist,_ = fastdtw(annotation_freqs, wh_freqs, dist=euclidean)
     norm_dist = dist/len(wh_freqs)
@@ -622,16 +543,7 @@ def Extract_Whistles(distance, norm_distance, recording, times, annotation_times
     else:
         peaks, props = find_peaks(-distance, height=-threshold, width=30)
     
-    # Extract whistles
-    # Wh = Parallel(n_jobs= n_jobs)(delayed(lambda peak: wh_from_peaks(peak, recording, times, annotation_times, alpha=alpha))(peak) for peak in peaks)
-    
     Wh = np.array(list(map(lambda peak: wh_from_peaks(peak, recording, times, annotation_times, annotation_freqs, annotation_name, alpha=alpha), peaks)))
-    
-    # Add distance information to extracted whistles     
-    # for i in range(len(Wh)):
-    #     # Wh[i]['distance'] = -1*props['peak_heights'][i]
-    #     Wh[i]['distance'] = distance[peaks[i]]
-    #     Wh[i]['normalized distance'] = norm_distance[peaks[i]]
     
     return Wh, distance, peaks
 
