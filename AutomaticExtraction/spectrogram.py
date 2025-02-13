@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jan 15 16:01:32 2021
+Spectrogram Analysis Module
 
-@author: faadil
+This module provides functionality for creating and analyzing spectrograms from audio files.
+It includes functions for:
+- Computing spectrograms from raw audio samples
+- Converting WAV files directly to spectrograms
+- Vectorizing spectrograms to extract frequency contours
+
+The implementation uses numpy's FFT and striding operations for efficient computation.
 """
+
 import numpy as np
 from scipy.io import wavfile
 from tqdm import tqdm
@@ -18,19 +25,29 @@ def spectrogram(samples, sample_rate, stride_ms = 5.0,
 
     Parameters
     ----------
-    samples : waveform samples.
-    sample_rate : acquisition frequency.
-    stride_ms : overlap stride used in ms. The default is 5.0.
-    window_ms : window used in ms. The default is 10.0.
-    max_freq : frequency maximum. The default is np.inf.
-    min_freq : frequency minimum. The default is 0.
+    samples : numpy.ndarray
+        Waveform samples as a 1D numpy array
+    sample_rate : int
+        Audio sampling rate in Hz
+    stride_ms : float, optional
+        Time step between successive windows in milliseconds (default: 5.0)
+    window_ms : float, optional
+        Size of the analysis window in milliseconds (default: 10.0)
+    max_freq : float, optional
+        Maximum frequency to include in output (default: np.inf)
+    min_freq : float, optional
+        Minimum frequency to include in output (default: 0)
 
     Returns
     -------
-    specgram
-    freqs 
-    times
-
+    tuple
+        Contains:
+        - specgram : numpy.ndarray
+            2D array containing the spectrogram values (frequency bins × time steps)
+        - freqs : numpy.ndarray
+            1D array of frequency values corresponding to the frequency bins
+        - times : numpy.ndarray
+            1D array of time values corresponding to the time steps
     """
     
     # Get number of points for each window and stride
@@ -74,25 +91,33 @@ def spectrogram(samples, sample_rate, stride_ms = 5.0,
 
 def wav_to_spec(recording_path, stride_ms = 5.0, window_ms = 10.0, max_freq = np.inf, min_freq = 0, cut=None):
     """
-    Function to get spectrogram from recording path directly. More effecient way to use the memory.
+    Convert a WAV file directly to a spectrogram representation.
 
     Parameters
     ----------
-    recording_path
-    stride_ms : overlap stride used in ms. The default is 5.0.
-    window_ms : window used in ms. The default is 10.0.
-    max_freq : frequency maximum. The default is np.inf.
-    min_freq : frequency minimum. The default is 0.
-    cut : optionnal. Used for selecting a portion of the recording.
-          Use a tuple (s_start, s_end) where s_start and s_end are 
-          the beginning and the end of the section in seconds.
+    recording_path : str
+        Path to the WAV file
+    stride_ms : float, optional
+        Time step between successive windows in milliseconds (default: 5.0)
+    window_ms : float, optional
+        Size of the analysis window in milliseconds (default: 10.0)
+    max_freq : float, optional
+        Maximum frequency to include in output (default: np.inf)
+    min_freq : float, optional
+        Minimum frequency to include in output (default: 0)
+    cut : tuple, optional
+        Time interval (start_sec, end_sec) to analyze. If None, entire file is processed.
 
     Returns
     -------
-    specgram
-    freqs 
-    times
-
+    tuple
+        Contains:
+        - specgram : numpy.ndarray
+            2D array containing the spectrogram values
+        - freqs : numpy.ndarray
+            1D array of frequency values
+        - times : numpy.ndarray
+            1D array of time values, adjusted for any cut interval
     """
     
     sample_rate, samples = wavfile.read(recording_path)
@@ -118,24 +143,32 @@ def wav_to_spec(recording_path, stride_ms = 5.0, window_ms = 10.0, max_freq = np
 
 def Vectorize_Spectrogram(specgram, freqs, window_size = 4, delta = 3):
     """
-    Compute a frequency signal into a vector from a spectrogram using the maximum 
-    amplitude on a small window.
-    
-    Secondly, the signal is smoothed by computing the maximum on a selected interval
-    depending on the previous and the next point.
+    Extract a frequency contour vector from a spectrogram using windowed maximum amplitude.
+
+    This function performs two main steps:
+    1. Extracts maximum frequency in sliding windows
+    2. Smooths the result by considering neighboring points
 
     Parameters
     ----------
-    specgram
-    freqs
-    window_size : Size of the window used to get the max. The default is 4.
-    delta : delta considered to compute the interval for each point. the default is 3.
-    graph_window : optional tkinter frame. Used for plotting a progress bar in a graphic window. Frame should be empty.
+    specgram : numpy.ndarray
+        2D array containing the spectrogram values
+    freqs : numpy.ndarray
+        1D array of frequency values
+    window_size : int, optional
+        Size of the sliding window for maximum detection (default: 4)
+    delta : int, optional
+        Range to consider when smoothing around each point (default: 3)
 
     Returns
     -------
-    vect
+    numpy.ndarray
+        1D array containing the extracted frequency contour
     
+    Notes
+    -----
+    The smoothing process uses a dynamic frequency range based on neighboring points
+    to ensure continuity in the extracted contour.
     """    
     
     #### Assign max on each window to the vector

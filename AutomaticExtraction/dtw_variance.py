@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Mar 24 10:21:56 2021
+Whistle Detection and Analysis Module
 
+This module provides functions for detecting and analyzing whistles in spectrograms,
+particularly useful for bioacoustic analysis. It includes tools for variance analysis,
+whistle detection, and comparison with annotated whistles using Dynamic Time Warping.
+
+Created on Wed Mar 24 10:21:56 2021
 @author: faadil
 """
 
@@ -13,82 +18,133 @@ from joblib import Parallel, delayed
 from scipy.signal import find_peaks
 from tqdm import tqdm
 
-
-
-def variance_vector(specgram, freqs, window_size = 5, n_jobs = -1):
-    #### Compute variance at each window    
+def variance_vector(specgram, freqs, window_size=5, n_jobs=-1):
+    """
+    Compute variance of frequency intensities in sliding windows across a spectrogram.
     
+    Parameters
+    ----------
+    specgram : numpy.ndarray
+        The spectrogram matrix (frequency x time)
+    freqs : numpy.ndarray
+        Array of frequency values
+    window_size : int, optional
+        Size of the sliding window (default=5)
+    n_jobs : int, optional
+        Number of parallel jobs (-1 for all cores) (default=-1)
+        
+    Returns
+    -------
+    numpy.ndarray
+        Vector of variance values for each window position
+    """
     # Initialize the vector and the window's indexes
     var_wind = np.zeros(specgram.shape[1])
     windows = []
     index_window_min = 0
     index_window_max = window_size
     
+    # Create list of all window positions
     windows.append((index_window_min, index_window_max))
-    
-    # Loop until the window pass outside the spectrogram
     while index_window_max < specgram.shape[1]:
-        
-        # Increment the window's indexes
         index_window_min += 1
         index_window_max += 1
-        
-        # Add to windows list
         windows.append((index_window_min, index_window_max))
     
-    # Append same window to the last 4 points
+    # Add padding windows at the end
     [windows.append((index_window_min, index_window_max)) for _ in range(4)]
     
     def apply_variance(window):
-        # Add all the frequency intensity on the current window
+        """Helper function to compute variance for a single window"""
+        # Sum frequency intensities in the window
         current_window = np.apply_along_axis(np.sum, 1, specgram[:,window[0]:window[1]])
         
-        # Rescale for probabilities
+        # Convert to probability distribution
         current_window = current_window/sum(current_window)
         
-        # Expectation
+        # Calculate variance using expectation formula
         expectation = sum(current_window*freqs)
         expectation_squared = sum(current_window*(freqs**2))
-        
-        # Variance
         return expectation_squared - expectation**2
     
-    
-    # Variance vector
-    var_wind = Parallel(n_jobs= n_jobs)(delayed(apply_variance)(window) for window in tqdm(windows))
+    # Compute variance for all windows in parallel
+    var_wind = Parallel(n_jobs=n_jobs)(delayed(apply_variance)(window) for window in tqdm(windows))
     
     return np.array(var_wind)
 
-
-def whistle_zones(var_wind, threshold = 1e6, window_length = 60, selection_percentage = 0.20):
+def whistle_zones(var_wind, threshold=1e6, window_length=60, selection_percentage=0.20):
+    """
+    Identify regions of low variance that likely contain whistles.
     
+    Parameters
+    ----------
+    var_wind : numpy.ndarray
+        Vector of variance values
+    threshold : float, optional
+        Variance threshold for whistle detection (default=1e6)
+    window_length : int, optional
+        Length of analysis window (default=60)
+    selection_percentage : float, optional
+        Minimum percentage of low variance points needed (default=0.20)
+        
+    Returns
+    -------
+    numpy.ndarray
+        Binary array marking whistle zones (1) and non-whistle zones (0)
+    """
+    # Create binary labels where 1 indicates variance below threshold
     labels = (var_wind <= threshold)*1
     
-    
+    # Initialize output array
     wh_zone = np.zeros(len(labels), dtype=int)
     
+    # Sliding window parameters
     index_window_min = 0
     index_window_max = window_length
     
-    # Loop until the window pass outside the labels vector
+    # Loop until the window passes outside the labels vector
     while index_window_max < len(labels):
-        # Test if there is a selected percentage of low variance point 
+        # Mark as whistle zone if enough low variance points are present
         if sum(labels[index_window_min:index_window_max]) >= selection_percentage*window_length:
             wh_zone[index_window_min:index_window_max] = 1
         
-        # Increment the window's indexes
-        index_window_min+=1
-        index_window_max+=1
+        index_window_min += 1
+        index_window_max += 1
     
-    # Compute last point
+    # Process final window
     if sum(labels[index_window_min:index_window_max]) >= selection_percentage*window_length:
         wh_zone[index_window_min:index_window_max] = 1
         
     return wh_zone
 
 
-def vectorize_wh_zones(specgram, times, freqs, wh_zone, window_size = 5, delta = 3):
+def vectorize_wh_zones(specgram, times, freqs, wh_zone, window_size=5, delta=3):
+    """
+    Extract frequency-time points from whistle zones in the spectrogram.
     
+    Parameters
+    ----------
+    specgram : numpy.ndarray
+        2D spectrogram array (frequency x time)
+    times : numpy.ndarray
+        Vector of time values corresponding to spectrogram columns
+    freqs : numpy.ndarray
+        Vector of frequency values corresponding to spectrogram rows
+    wh_zone : numpy.ndarray
+        Binary array marking whistle zones (1) and non-whistle zones (0)
+    window_size : int, optional
+        Size of sliding window in time bins (default=5)
+    delta : int, optional
+        Step size for sliding window (default=3)
+        
+    Returns
+    -------
+    tuple
+        Two lists containing:
+        - whf: Frequencies of detected whistles
+        - wht: Corresponding times of detected whistles
+    """
+
     # Progress bar
     pbar = tqdm(total=specgram.shape[1]+1)
     
@@ -270,6 +326,23 @@ def vectorize_wh_zones(specgram, times, freqs, wh_zone, window_size = 5, delta =
 
         
 def split_wh_zones(wht, whf, delta_t = 1):
+    """
+    Split whistle detections into separate segments based on time gaps.
+    
+    Parameters
+    ----------
+    wht : numpy.ndarray
+        Array of whistle time points
+    whf : numpy.ndarray
+        Array of whistle frequencies
+    delta_t : float, optional
+        Minimum time gap to split whistles (default=1 second)
+        
+    Returns
+    -------
+    list
+        List of tuples containing (times, frequencies) for each whistle segment
+    """
     # List to store separated whistle zones
     split_wh = []
     
@@ -277,19 +350,15 @@ def split_wh_zones(wht, whf, delta_t = 1):
     current_whf = [whf[0]]
     current_wht = [wht[0]]
     
-    # Progress bar
-    # pbar = tqdm(total=len(wht))
-    
-    # Loop unitl out of whole whistle zone
+    # Loop until out of whole whistle zone
     i = 1
     while (i < len(wht)):
-        # Loop until time points are separated of at least delta_t (default : 1 sec)
+        # Group points that are closer than delta_t
         while ((wht[i]-wht[i-1] < delta_t) & (i < len(wht))) :
             current_whf.append(whf[i])
             current_wht.append(wht[i])
             if i == len(wht)-1: break
             i+=1
-            # pbar.update(1)
         
         # Add current whistle zone to list
         split_wh.append((current_wht, current_whf))
@@ -298,98 +367,97 @@ def split_wh_zones(wht, whf, delta_t = 1):
         current_whf = [whf[i]]
         current_wht = [wht[i]]
         
-        # Update index and progress bar 
         i+=1
-        # pbar.update(1)
     
     return split_wh
-    
-
 
 def distance_wh_zones(wht, whf, annotation_freqs, annotation_times, alphas = (0.5,1.25), n_jobs=-1):
+    """
+    Calculate DTW distances between detected whistles and annotation template.
     
+    Parameters
+    ----------
+    wht : numpy.ndarray
+        Whistle time points
+    whf : numpy.ndarray
+        Whistle frequencies
+    annotation_freqs : numpy.ndarray
+        Template annotation frequencies
+    annotation_times : numpy.ndarray
+        Template annotation times
+    alphas : tuple, optional
+        (min_scale, max_scale) for window size relative to annotation length (default=(0.5,1.25))
+    n_jobs : int, optional
+        Number of parallel jobs (default=-1)
+        
+    Returns
+    -------
+    tuple
+        (raw distances array, normalized distances array)
+    """
     # List to store every window
     windows = []
     
-    # get duration of annotation
+    # Get duration of annotation
     len_annots_times = annotation_times[-1] - annotation_times[0]
     
     # First window from t=0 to t= alpha1 (default:1.25) x annotation duration
     ind_min = 0
     ind_max = sum((wht - wht[0]) <= alphas[1]*len_annots_times)
-    # Add window to list
     windows.append((ind_min, ind_max))
-    # Move left border of window of one frame
     ind_min += 1
     
     # Loop until window is out of spectrogram    
     while (ind_max < len(wht))&(ind_min < len(wht)) :
-        # Select rigth border of window such as window length <= alpha1 (default:1.25) x annotation duration 
+        # Select right border of window such as window length <= alpha1 x annotation duration 
         ind_max = np.max(np.where(wht <= wht[ind_min]+alphas[1]*len_annots_times))
         
-        # Test if window length >= alpha0 (default:0.5) x annotation duration
+        # Test if window length >= alpha0 x annotation duration
         if wht[ind_max] - wht[ind_min] >= alphas[0]*len_annots_times:
-            # Add window to list
             windows.append((ind_min, ind_max))
-            # Move left border of window of one frame
             ind_min += 1
-        else :
-            # If window length < alpha0 (default:0.5) x annotation duration
-            # Get number of points in current window
+        else:
+            # If window length < alpha0 x annotation duration
             n_points = ind_max - ind_min
-            # Add same window n_points time to list
             [windows.append((ind_min, ind_max)) for _ in range(n_points+1)]
-            # Move left border of n_points+1 frame
             ind_min = ind_max+1
-                
-        
-    # Function for parallelizing
+    
     def apply_distance(window):
-        """
-        Compute distance on given window.
-        """
+        """Helper function to compute DTW distance for a window"""
         dist, _ = fastdtw(annotation_freqs, whf[window[0]:window[1]], dist=euclidean)
-        
         norm_dist = dist/(window[1]-window[0])
-        
-        # # Graphic window display update
-        # if graph_window is not None:
-        #     bar["value"] += progress
-        #     graph_window.update_idletasks()
-
-        
         return dist, norm_dist
     
-    # Distance vector
-    Distances = Parallel(n_jobs= n_jobs)(delayed(apply_distance)(window) for window in tqdm(windows))
+    # Compute distances in parallel
+    Distances = Parallel(n_jobs=n_jobs)(delayed(apply_distance)(window) for window in tqdm(windows))
     
     Dist = [d[0] for d in Distances]
     Norm_Dist = [d[1] for d in Distances]
     
     return np.array(Dist), np.array(Norm_Dist)
-    
-    
 
 def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_jobs=-1):
     """
-    Compute distance between every frame (points by points) of the recording 
-    and the whistle annotation using DTW.
-
+    Compute DTW distance between each frame of the recording and the annotation template.
+    
     Parameters
     ----------
-    recording : Frequency vector of the recording.
-    times : Time vector of the recording.
-    annotation_freqs : Frequency vector of the annotation.
-    annotation_times : Time vector of the annotation.
-    n_jobs : Number of core to use for computing. -1 means all the cores available,-2 all but one and so on. 
-             The default is -1.
-
+    recording : numpy.ndarray
+        Frequency vector of the recording
+    times : numpy.ndarray
+        Time vector of the recording
+    annotation_freqs : numpy.ndarray
+        Template annotation frequencies
+    annotation_times : numpy.ndarray
+        Template annotation times
+    n_jobs : int, optional
+        Number of parallel jobs (default=-1)
+        
     Returns
     -------
-    Dist : Distance vector.
-
+    numpy.ndarray
+        Array of DTW distances for each frame
     """
-    
     # Time to start at t=0
     var_annots_times = annotation_times - annotation_times[0]
     var_times = times - times[0]
@@ -405,74 +473,80 @@ def distance_per_frame(recording, times, annotation_freqs, annotation_times, n_j
     ind_min +=1
     ind_max +=1
     
+    # Create sliding windows
     while (ind_min < len(recording)):
         windows.append((ind_min, ind_max))
-        
         ind_min +=1
         ind_max +=1
     
-    
-    # Function for parallelizing
     def apply_distance(window):
-        """
-        Compute distance on given window.
-        """
+        """Helper function to compute DTW distance for a window"""
         dist, _ = fastdtw(annotation_freqs, recording[window[0]:window[1]], dist=euclidean)
-        
         return dist
     
-    # Distance vector
-    Dist = Parallel(n_jobs= n_jobs)(delayed(apply_distance)(window) for window in tqdm(windows))
+    # Compute distances in parallel
+    Dist = Parallel(n_jobs=n_jobs)(delayed(apply_distance)(window) for window in tqdm(windows))
     
     return np.array(Dist)
 
 
-
 def get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs):
     """
-    Detect whistle's start and end using DTW points association.
+    Detect whistle's start and end points using DTW points association.
 
     Parameters
     ----------
-    annotation_times : 
-    annotation_freqs : 
-    wh_freqs : 
-    wh_times : 
+    annotation_times : numpy.ndarray
+        Time points of the annotation template
+    annotation_freqs : numpy.ndarray
+        Frequency values of the annotation template
+    wh_times : numpy.ndarray
+        Time points of the detected whistle
+    wh_freqs : numpy.ndarray
+        Frequency values of the detected whistle
 
     Returns
     -------
-
+    tuple
+        (trimmed whistle frequencies, trimmed whistle times)
     """
-    
-    
+    # Calculate percentile points for analysis (10% and 90%)
     first = np.ceil(10/100*len(annotation_freqs))
     last = np.floor(90/100*len(annotation_freqs))
     
+    # Compute DTW path between annotation and whistle
     dist, path = fastdtw(annotation_freqs, wh_freqs, dist=euclidean)
     
+    # Extract path coordinates
     p0 = np.array([t[0] for t in path])
     p1 = np.array([t[1] for t in path])
     
+    # Map annotation points to whistle points
     s = [0]
     for i in range(len(annotation_freqs)):
         s.append(p1[max(np.where(p0==i)[0])])
     
     s = np.array(s)
     
+    # Calculate point-to-point distances
     dist_points = s[1:]-s[:-1]
     
-    if sum(dist_points[:first] >= 10) : cut_start = s[max(np.where(dist_points[:first] >= 10)[0])+1]
-    else: cut_start=0 
+    # Determine cut points based on large jumps in distance
+    if sum(dist_points[:first] >= 10):
+        cut_start = s[max(np.where(dist_points[:first] >= 10)[0])+1]
+    else: 
+        cut_start=0 
     
-    if sum(dist_points[last:] >= 10) : cut_end = s[min(np.where(dist_points[last:] >= 10)[0]) + last]
-    else: cut_end=len(wh_freqs)-1
+    if sum(dist_points[last:] >= 10):
+        cut_end = s[min(np.where(dist_points[last:] >= 10)[0]) + last]
+    else:
+        cut_end=len(wh_freqs)-1
     
+    # Trim the whistle to the detected limits
     wh_freqs = wh_freqs[cut_start:cut_end]
     wh_times = wh_times[cut_start:cut_end]
     
     return wh_freqs, wh_times
-
-
 
 def wh_from_peaks(peak, recording, times, annotation_times, annotation_freqs, annotation_name, alpha=1.25):
     """
@@ -480,70 +554,114 @@ def wh_from_peaks(peak, recording, times, annotation_times, annotation_freqs, an
 
     Parameters
     ----------
-    peak : Distance minimum peak corresponding to the beginning of the whistle.
-    recording : Frequency vector of the recording.
-    times : Time vector of the recording.
-    annotation_times : Time vector of the annotation.
+    peak : int
+        Index of distance minimum peak corresponding to whistle start
+    recording : numpy.ndarray
+        Frequency vector of the recording
+    times : numpy.ndarray
+        Time vector of the recording
+    annotation_times : numpy.ndarray
+        Time vector of the annotation template
+    annotation_freqs : numpy.ndarray
+        Frequency vector of the annotation template
+    annotation_name : str
+        Name/identifier of the annotation
+    alpha : float, optional
+        Scaling factor for whistle duration (default=1.25)
 
     Returns
     -------
-    wh : Dictionary composed of the frequency and the time of the whistle {whf, wht}.
-
+    dict
+        Dictionary containing whistle information:
+        - whf: frequency values
+        - wht: time points
+        - onset: start time
+        - offset: end time
+        - distance: DTW distance
+        - normalized distance: distance normalized by length
+        - annotation: annotation name
     """
     # Take the peak as t=0
     t0 = times - times[peak]
-    # alpha (default: 1.25) x Annotated whistle duration 
+    # Calculate expected whistle duration based on annotation
     annots_duration = annotation_times[-1]-annotation_times[0]
     wh_duration = alpha*annots_duration
     
-    # Whistle's frequency
+    # Extract whistle frequencies and times
     wh_freqs = recording[(t0 <= wh_duration) & (t0 >= 0)]
     ind_times = np.where((t0 <= wh_duration) & (t0 >= 0))[0]
     ind_times = ind_times[ind_times < len(times)]
     
-    # Whistle's time
+    # Get corresponding time points
     wh_times = times[ind_times]
     
+    # Refine whistle boundaries
     wh_freqs, wh_times = get_whistle_limit(annotation_times, annotation_freqs, wh_times, wh_freqs)
     
+    # Calculate distances
     dist,_ = fastdtw(annotation_freqs, wh_freqs, dist=euclidean)
     norm_dist = dist/len(wh_freqs)
     
-    wh = {'whf':wh_freqs, 'wht':wh_times, 'onset':wh_times[0], 'offset':wh_times[-1], 
-          'distance':dist, 'normalized distance':norm_dist, 'annotation':annotation_name}
+    # Create whistle dictionary
+    wh = {
+        'whf': wh_freqs,
+        'wht': wh_times,
+        'onset': wh_times[0],
+        'offset': wh_times[-1],
+        'distance': dist,
+        'normalized distance': norm_dist,
+        'annotation': annotation_name
+    }
     return wh
 
-def Extract_Whistles(distance, norm_distance, recording, times, annotation_times, annotation_freqs, annotation_name, threshold = 0.2*1e6, n_jobs=-1, alpha=1.25, normalized=False):
+def Extract_Whistles(distance, norm_distance, recording, times, annotation_times, annotation_freqs, annotation_name, threshold=0.2*1e6, n_jobs=-1, alpha=1.25, normalized=False):
     """
-    Extract all the whistles that are similar to an annotated whistle 
-    from a vectorized recording while using the distance vector.
+    Extract all whistles that are similar to an annotated whistle from a recording using distance metrics.
 
     Parameters
     ----------
-    distance : Distance vector between the recording and the annotated whistle.
-    norm_distance :
-    recording : Frequency vector of the recording.
-    times : Time vector of the recording.
-    annotation_times : Time vector of the annotation.
-    threshold : threshold used to select whistles.
-    n_jobs : Number of core to use for computing. -1 means all the cores available,-2 all the cores but one and so on. 
-             The default is -1.
-    normalized : Used normalized distance instead of distance. Optional. The default is False
+    distance : numpy.ndarray
+        Vector of DTW distances between recording and template
+    norm_distance : numpy.ndarray
+        Vector of normalized DTW distances
+    recording : numpy.ndarray
+        Frequency vector of the recording
+    times : numpy.ndarray
+        Time vector of the recording
+    annotation_times : numpy.ndarray
+        Time vector of the annotation template
+    annotation_freqs : numpy.ndarray
+        Frequency vector of the annotation template
+    annotation_name : str
+        Name/identifier of the annotation
+    threshold : float, optional
+        Distance threshold for whistle detection (default=0.2e6)
+    n_jobs : int, optional
+        Number of parallel jobs (default=-1)
+    alpha : float, optional
+        Scaling factor for whistle duration (default=1.25)
+    normalized : bool, optional
+        Whether to use normalized distances (default=False)
 
     Returns
     -------
-    Wh : List of all extracted whistles. Whistles saved as dictionaries {whf,wht}.
-    peaks : Whistles' beginning indexes.
-
+    tuple
+        (whistle array, distance vector, peak indices)
+        - whistle array: array of whistle dictionaries
+        - distance vector: vector of distances used
+        - peak indices: indices where whistles were detected
     """
-    
-    # Detect whistles
+    # Detect whistles using peak detection
     if normalized:
         peaks, props = find_peaks(-norm_distance, height=-threshold, width=30)
     else:
         peaks, props = find_peaks(-distance, height=-threshold, width=30)
     
-    Wh = np.array(list(map(lambda peak: wh_from_peaks(peak, recording, times, annotation_times, annotation_freqs, annotation_name, alpha=alpha), peaks)))
+    # Extract whistles at each peak
+    Wh = np.array(list(map(
+        lambda peak: wh_from_peaks(peak, recording, times, annotation_times, 
+                                 annotation_freqs, annotation_name, alpha=alpha),
+        peaks)))
     
     return Wh, distance, peaks
 
