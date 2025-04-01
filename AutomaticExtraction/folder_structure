@@ -1,0 +1,27 @@
+src/
+├── audio/
+│   ├── __init__.py
+│   ├── spectrogram.py
+│   └── processing.py
+├── detection/
+│   ├── __init__.py
+│   ├── model.py
+│   └── predict.py
+├── extraction/
+│   ├── __init__.py
+│   ├── contour.py
+│   ├── dtw.py
+│   └── clustering.py
+├── training/
+│   ├── __init__.py
+│   ├── finetune.py
+│   └── data_preparation.py
+├── utils/
+│   ├── __init__.py
+│   └── helpers.py
+├── cli/
+│   ├── __init__.py
+│   ├── detect_command.py
+│   ├── extract_command.py
+│   └── train_command.py
+└── main.py

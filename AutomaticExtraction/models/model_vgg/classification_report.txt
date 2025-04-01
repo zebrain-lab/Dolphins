@@ -1,0 +1,10 @@
+              precision    recall  f1-score   support
+
+       noise       0.83      0.99      0.90      1283
+     whistle       0.99      0.82      0.90      1407
+
+    accuracy                           0.90      2690
+   macro avg       0.91      0.90      0.90      2690
+weighted avg       0.92      0.90      0.90      2690
+
+# The model needs preprocess_input from keras

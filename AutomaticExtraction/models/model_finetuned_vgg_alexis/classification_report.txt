@@ -1,0 +1,16 @@
+              precision    recall  f1-score   support
+
+       noise       0.90      0.99      0.95      1283
+     whistle       0.99      0.90      0.95      1407
+
+    accuracy                           0.95      2690
+   macro avg       0.95      0.95      0.95      2690
+weighted avg       0.95      0.95      0.95      2690
+
+
+# The model needs preprocess_input from keras plus image=image/255 also (double normalization which is not great)
+# Code :
+#    train_ds = train_ds.map(lambda x, y: (preprocess_input(x) / 255.0, y))
+#    val_ds = val_ds.map(lambda x, y: (preprocess_input(x) / 255.0, y))
+#    if test_ds:
+#        test_ds = test_ds.map(lambda x, y: (preprocess_input(x) / 255.0, y))
