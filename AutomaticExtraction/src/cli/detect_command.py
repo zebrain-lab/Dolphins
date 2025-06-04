@@ -89,4 +89,22 @@ def detect_command(args):
     )
     
     print(f"Detection complete. Results saved to {args.saving_folder}")
-    return 0 
+    return 0
+
+def main():
+    """
+    Main function to run the detect command directly.
+    """
+    parser = argparse.ArgumentParser(description='Detect whistles in audio files')
+    subparsers = parser.add_subparsers(dest='command')
+    setup_detect_parser(subparsers)
+    
+    args = parser.parse_args()
+    if args.command == 'detect':
+        return detect_command(args)
+    else:
+        parser.print_help()
+        return 1
+
+if __name__ == '__main__':
+    exit(main()) 
