@@ -37,6 +37,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Ignore old version folder
-# AutomaticExtraction/old_version/
+# Ignore old version folder and large model files
+#AutomaticExtraction/old_version/
+AutomaticExtraction/old_version/models/
+*.h5
 examples/Exp_01_Dec_2021_0845_channel_0.wav
