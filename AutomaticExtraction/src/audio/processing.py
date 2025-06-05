@@ -82,8 +82,8 @@ def process_audio_file(file_path, saving_folder="./images", batch_size=50, start
         List of spectrogram images as numpy arrays
     """
     try:
-        # Load sound recording
-        fs, x = wavfile.read(file_path)
+        # Get audio file info without loading entire file
+        fs, _ = wavfile.read(file_path, mmap=True)
     except FileNotFoundError:
         raise FileNotFoundError(f"File {file_path} not found.")
     
@@ -93,37 +93,47 @@ def process_audio_file(file_path, saving_folder="./images", batch_size=50, start
     
     images = []
     file_name = os.path.splitext(os.path.basename(file_path))[0]
-    N = len(x)  # signal length
-
+    
+    # Calculate chunk parameters
+    chunk_duration = sliding_w * batch_size  # Duration of each chunk in seconds
+    chunk_samples = int(chunk_duration * fs)
+    start_sample = int(start_time * fs)
+    
     if end_time is not None:
-        N = min(N, int(end_time * fs))
+        end_sample = int(end_time * fs)
+    else:
+        # Get file size and calculate total samples
+        file_size = os.path.getsize(file_path)
+        total_samples = file_size // (2 if 'int16' in wavfile.read(file_path, mmap=True)[1].dtype.name else 4)  # Assuming int16 or float32
+        end_sample = total_samples
 
-    low = int(start_time * fs)
-    samples_per_slice = int(sliding_w * fs)
-
-    for _ in range(batch_size):
-        if low + samples_per_slice > N:  # Check if the slice exceeds the signal length
+    # Process audio in chunks
+    current_sample = start_sample
+    while current_sample < end_sample and len(images) < batch_size:
+        # Read only the chunk we need
+        with open(file_path, 'rb') as f:
+            f.seek(current_sample * 2)  # Assuming 16-bit audio
+            chunk_data = np.frombuffer(f.read(chunk_samples * 2), dtype=np.int16)
+        
+        if len(chunk_data) == 0:
             break
             
-        # Extract the current slice
-        x_w = x[low:low + samples_per_slice]
-        
-        # Calculate the spectrogram
+        # Calculate the spectrogram for this chunk
         specgram, freqs, times = wav_to_spectrogram(
-            file_path, 
-            stride_ms=10.0, 
-            window_ms=20.0, 
-            max_freq=cut_high_frequency*1000, 
+            file_path,
+            stride_ms=10.0,
+            window_ms=20.0,
+            max_freq=cut_high_frequency*1000,
             min_freq=cut_low_frequency*1000,
-            cut=(low/fs, (low+samples_per_slice)/fs)
+            cut=(current_sample/fs, (current_sample+len(chunk_data))/fs)
         )
         
         # Create the spectrogram image
         image = create_spectrogram_image(
-            specgram, 
-            freqs, 
-            times, 
-            cut_low_freq=cut_low_frequency, 
+            specgram,
+            freqs,
+            times,
+            cut_low_freq=cut_low_frequency,
             cut_high_freq=cut_high_frequency
         )
         
@@ -132,10 +142,13 @@ def process_audio_file(file_path, saving_folder="./images", batch_size=50, start
         
         # Save the image if requested
         if save:
-            image_name = os.path.join(saving_folder, f"{file_name}-{low/fs}.jpg")
-            plt.imsave(image_name, image)
+            image_name = os.path.join(saving_folder, f"{file_name}-{current_sample/fs}.jpg")
+            cv2.imwrite(image_name, image)
         
         images.append(image)
-        low += samples_per_slice
+        current_sample += int(sliding_w * fs)  # Move to next segment
+        
+        if len(images) >= batch_size:
+            break
 
     return images 

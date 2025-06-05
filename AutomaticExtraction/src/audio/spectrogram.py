@@ -119,7 +119,7 @@ def wav_to_spectrogram(recording_path, stride_ms=5.0, window_ms=10.0,
 
 def create_spectrogram_image(specgram, freqs, times, cut_low_freq=3, cut_high_freq=20):
     """
-    Create a spectrogram image from spectrogram data.
+    Create a spectrogram image from spectrogram data using direct NumPy operations.
     
     Parameters
     ----------
@@ -142,25 +142,17 @@ def create_spectrogram_image(specgram, freqs, times, cut_low_freq=3, cut_high_fr
     # Convert to dB scale
     specgram_db = 20 * np.log10(np.abs(specgram) + 1e-14)
     
-    # Create figure with no margins
-    fig, ax = plt.subplots()
-    ax.pcolormesh(times, freqs / 1000, specgram_db, cmap='gray')
-    ax.set_ylim(cut_low_freq, cut_high_freq)
-    ax.set_axis_off()
+    # Apply frequency cutoff
+    freq_mask = (freqs >= cut_low_freq * 1000) & (freqs <= cut_high_freq * 1000)
+    specgram_db = specgram_db[freq_mask]
     
-    # Adjust figure size and margins
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    # Normalize to 0-255 range
+    specgram_norm = np.clip((specgram_db - np.min(specgram_db)) / (np.max(specgram_db) - np.min(specgram_db)) * 255, 0, 255)
     
-    # Render the figure to an array
-    fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
-    width, height = int(renderer.width), int(renderer.height)
-    buf = renderer.buffer_rgba()
-    image = np.frombuffer(buf, dtype=np.uint8).reshape((height, width, 4))
+    # Convert to uint8 and create grayscale image
+    image = np.uint8(specgram_norm)
     
-    # Remove alpha channel
-    image = image[:, :, :3]
+    # Convert to RGB (3 channels)
+    image_rgb = np.stack([image] * 3, axis=-1)
     
-    plt.close(fig)
-    
-    return image 
+    return image_rgb 

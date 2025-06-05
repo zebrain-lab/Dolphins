@@ -89,39 +89,40 @@ def process_and_predict(file_path, batch_duration, start_time, end_time, batch_s
     for batch in tqdm(range(num_batches), desc=f"Batches for {transformed_file_name}", leave=False, colour='blue'):
         start = batch * batch_duration + start_time
         images = process_audio_file(file_path, saving_folder_file, batch_size=batch_size, start_time=start, end_time=end_time)
-        saving_positive = os.path.join(saving_folder_file, "positive")
         
-        image_batch = []
+        if not images:
+            continue
+            
+        # Pre-allocate arrays for batch processing
+        batch_size = len(images)
+        image_batch = np.zeros((batch_size, 224, 224, 3), dtype=np.float32)
         time_batch = []
-
+        
+        # Process all images in the batch at once
         for idx, image in enumerate(images):
-            im_cop = image
             image_start_time = round(start + idx * 0.4, 2)
             image_end_time = round(image_start_time + 0.4, 2)
+            time_batch.append((image, image_start_time, image_end_time))
+            image_batch[idx] = cv2.resize(image, (224, 224)) / 255.0
 
-            image = cv2.resize(image, (224, 224))
-            image = np.expand_dims(image, axis=0)
-            # Normalization for the model
-            image = image/255
+        # Make predictions on the entire batch at once
+        predictions = model.predict(image_batch, verbose=0)
+        
+        # Process predictions
+        positive_indices = predictions[:, 1] > predictions[:, 0]
+        for idx in np.where(positive_indices)[0]:
+            im_cop, image_start_time, image_end_time = time_batch[idx]
+            record_names.append(file_name)
+            positive_initial.append(image_start_time)
+            positive_finish.append(image_end_time)
+            class_1_scores.append(predictions[idx, 1])
             
-            image_batch.append(image)
-            time_batch.append((im_cop, image_start_time, image_end_time))
-
-        if image_batch:
-            image_batch = np.vstack(image_batch)
-            predictions = model.predict(image_batch, verbose=0)
-            for idx, prediction in enumerate(predictions):
-                im_cop, image_start_time, image_end_time = time_batch[idx]
-                if prediction[1] > prediction[0]:
-                    record_names.append(file_name)
-                    positive_initial.append(image_start_time)
-                    positive_finish.append(image_end_time)
-                    class_1_scores.append(prediction[1])
-                    if save_p:
-                        if not os.path.exists(saving_positive):
-                            os.makedirs(saving_positive)
-                        image_name = os.path.join(saving_positive, f"{image_start_time}-{image_end_time}.jpg")
-                        cv2.imwrite(image_name, im_cop)
+            if save_p:
+                saving_positive = os.path.join(saving_folder_file, "positive")
+                if not os.path.exists(saving_positive):
+                    os.makedirs(saving_positive)
+                image_name = os.path.join(saving_positive, f"{image_start_time}-{image_end_time}.jpg")
+                cv2.imwrite(image_name, im_cop)
 
     return record_names, positive_initial, positive_finish, class_1_scores
 
