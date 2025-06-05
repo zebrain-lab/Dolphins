@@ -1,0 +1,8 @@
+              precision    recall  f1-score   support
+
+       noise       0.91      0.98      0.94      2425
+     whistle       0.98      0.91      0.94      2686
+
+    accuracy                           0.94      5111
+   macro avg       0.94      0.94      0.94      5111
+weighted avg       0.94      0.94      0.94      5111
