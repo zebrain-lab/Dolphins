@@ -1,8 +1,3 @@
-              precision    recall  f1-score   support
-
-       noise       0.91      0.98      0.94      2425
-     whistle       0.98      0.91      0.94      2686
-
-    accuracy                           0.94      5111
-   macro avg       0.94      0.94      0.94      5111
-weighted avg       0.94      0.94      0.94      5111
+version https://git-lfs.github.com/spec/v1
+oid sha256:85ba8f78ac992c2551a8344b58c8e994964e688dbd352375c6cfa92e04adf4dc
+size 326
