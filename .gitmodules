@@ -1,0 +1,4 @@
+[submodule "Whistle-MarkovModel"]
+	path = Whistle-MarkovModel
+	url = https://github.com/fmustun/Whistle-MarkovModel.git
+	branch = master
