@@ -1,15 +1,16 @@
 # Dolphin Whistle Detection and Extraction
 
-A Python package for automatically detecting and extracting dolphin whistles from audio recordings using deep learning models and template matching techniques.
+A Python package for automatically detecting and extracting dolphin whistles from audio recordings, with optional **Markov transition network** analysis of whistle sub-categories (R submodule).
 
 ## Overview
 
-This package provides a comprehensive solution for analyzing dolphin vocalizations by:
+This repository provides a comprehensive solution for analyzing dolphin vocalizations by:
 
 1. **Detection**: Using pre-trained deep learning models (VGG-based) to identify whistle segments in audio recordings
 2. **Extraction**: Extracting frequency contours from detected whistles using spectrogram analysis
 3. **Template Matching**: Matching extracted whistles against known templates using Dynamic Time Warping (DTW)
 4. **Clustering**: Grouping similar whistles together for analysis
+5. **Markov modeling**: Modeling significant transitions between whistle sub-categories as a network ([Whistle-MarkovModel](https://github.com/fmustun/Whistle-MarkovModel))
 
 ## Features
 
@@ -18,6 +19,7 @@ This package provides a comprehensive solution for analyzing dolphin vocalizatio
 - **Template Matching**: Uses DTW (Dynamic Time Warping) to match whistles against known templates
 - **Batch Processing**: Efficiently processes multiple audio files with parallel processing
 - **Clustering Analysis**: Groups similar whistles using distance-based clustering
+- **Markov transition networks** (R): Null-model significance, network plots, node- and global-level metrics via the `Whistle-MarkovModel` submodule
 - **Flexible CLI**: Command-line interface for easy integration into workflows
 
 ## Installation
@@ -38,6 +40,16 @@ This package provides a comprehensive solution for analyzing dolphin vocalizatio
 pip install -r requirements.txt
 ```
 
+### Clone with the Markov submodule
+
+`Whistle-MarkovModel` is included as a [git submodule](https://git-scm.com/book/en/v2/Git-Tools-Submodules). After cloning Dolphins, initialize it:
+
+```bash
+git clone --recurse-submodules git@github.com:zebrain-lab/Dolphins.git
+# or, if you already cloned without submodules:
+git submodule update --init --recursive
+```
+
 ## Package Structure
 
 ```
@@ -51,9 +63,18 @@ AutomaticExtraction/
 │   └── utils/              # Helper functions
 ├── models/                 # Pre-trained detection models
 └── examples/               # Example audio files and templates
+
+Whistle-MarkovModel/        # Git submodule: R Markov transition network analysis
+├── R/                      # Config, data loading, graph utilities
+├── scripts/                # Pipeline scripts (01 → 03)
+└── data/                   # Input CSV (see data/README.md)
 ```
 
 ## Usage
+
+### Markov transition network analysis
+
+For R installation and Markov modelisation, refer to the full submodule documentation: [Whistle-MarkovModel/README.md](Whistle-MarkovModel/README.md).
 
 ### Command-Line Interface
 
